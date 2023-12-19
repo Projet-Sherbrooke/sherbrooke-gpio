@@ -60,74 +60,73 @@ static int _gpio_wait_ready(struct gpio *gpio) {
     return 0;
 }
 
+#define _DIR_OUTPUT "out"
+#define _DIR_INPUT  "in"
+#define _EDGE_BOTH  "both"
+
 static int _gpio_open(int gpioId, int dir, struct gpio *gpio) {
-    char dir_output[] = "out";
-    char dir_input[] = "in";
-    char edge_both[] = "both";
-    char buf[PATH_MAX];
-    int fd;
+    char path[PATH_MAX];
+    int fd, res = 0;
     size_t sz;
 
     /* Allocate some memory for the GPIO data */
-    if ((gpio->priv = malloc(sizeof(struct gpio_priv))) < 0) {
-        /* Malloc failed */
-    }
-
-    snprintf(gpio->priv->dir_path, PATH_MAX, GPIO_DIR_FILE_FMT, gpioId);
-    snprintf(gpio->priv->value_path, PATH_MAX, GPIO_VALUE_FILE_FMT, gpioId);
-    snprintf(gpio->priv->edge_path, PATH_MAX, GPIO_EDGE_FILE_FMT, gpioId);
+    if ((gpio->priv = malloc(sizeof(struct gpio_priv))) < 0)
+        return -1;
 
     /*  */
-    if (_gpio_export(gpioId) < 0) {
+    if (_gpio_export(gpioId) < 0)
         return -1;
-    }
 
     /* Wait for the GPIO device to show up. */
-    if (_gpio_wait_ready(gpio) < 0) {
+    if (_gpio_wait_ready(gpio) < 0)
         return -1;
-    }
-
+    
     /* Set the direction */
-    if ((fd = open(gpio->priv->dir_path, O_WRONLY)) < 0) {
+    snprintf(path, PATH_MAX, GPIO_DIR_FILE_FMT, gpioId);
+
+    if ((fd = open(path, O_WRONLY)) < 0) 
         return -1;
-    }
 
     if (dir == GPIO_DIR_OUT) {
-        sz = sizeof(dir_output) - 1;
-        if (write(fd, dir_output, sz) < sz, close(fd)) {
-            return -1;
-        }
+        sz = sizeof(_DIR_OUTPUT) - 1;
+        if (write(fd, _DIR_OUTPUT, sz) < sz)
+            res = -1
+        close(fd);
+        if (res) return res;
     }
     /* If this is for input, set the edge to rising. */
     else if (dir == GPIO_DIR_IN) {
-        sz = sizeof(dir_input) - 1;
-        if (write(fd, dir_input, sz) < sz, close(fd)) {
-            return -1;
-        }
+        sz = sizeof(_DIR_INPUT) - 1;
+        if (write(fd, _DIR_INPUT, sz) < sz)
+            res = -1;
+        close(fd);
+        if (res) return res;
+
+        snprintf(path, PATH_MAX, GPIO_EDGE_FILE_FMT, gpioId);
 
         /* Tell that we want an event on rising edge. */
-        if ((fd = open(gpio->priv->edge_path, O_WRONLY)) < 0) {
+        if ((fd = open(gpio->priv->edge_path, O_WRONLY)) < 0)
             return -1;
-        }
 
-        sz = sizeof(edge_both) - 1;
-        if (write(fd, edge_both, sz) < sz, close(fd)) {
-            return -1;
-        }
+        sz = sizeof(_EDGE_BOTH) - 1;
+        if (write(fd, _EDGE_BOTH, sz) < sz, close(fd))
+            res = -1;
+        close(fd);
+        if (res) return res;
     }
 
     gpio->gpio = gpioId;
     gpio->dir = dir;
 
-    if (dir == GPIO_DIR_OUT) {
-        gpio->priv->fd = open(gpio->priv->value_path, O_WRONLY);
-    } else {
-        gpio->priv->fd = open(gpio->priv->value_path, O_RDONLY);
-    }
+    snprintf(path, PATH_MAX, GPIO_VALUE_FILE_FMT, gpioId);
 
-    if (gpio->priv->fd < 0) {
+    if (dir == GPIO_DIR_OUT)
+        gpio->priv->fd = open(gpio->priv->value_path, O_WRONLY);
+    else
+        gpio->priv->fd = open(gpio->priv->value_path, O_RDONLY);
+
+    if (gpio->priv->fd < 0)
         return -1;
-    }
 
     return 0;
 }
