@@ -14,8 +14,11 @@ struct gpio {
     /* Value to write back to the GPIO line on close */
     int init_value;
 
-    int gpio;
     /* GPIO line */
+    int gpio;
+
+    /*  */
+    int ready;
 
     struct gpio_priv *priv;
 };
@@ -27,7 +30,7 @@ int gpio_open_write(int gpioId, struct gpio *gpio);
 
 int gpio_open_read(int gpioId, struct gpio *gpio);
 
-int gpio_wait_single(struct gpio *gpio);
+int gpio_wait(int n, ...);
 
 int gpio_read(struct gpio *gpio, int *val);
 

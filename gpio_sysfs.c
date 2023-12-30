@@ -6,6 +6,7 @@
 #include <limits.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdarg.h>
 #include <stdlib.h>
 
 #include "gpio.h"
@@ -49,9 +50,9 @@ static int _gpio_unexport(int gpioId) {
 
 /* It takes some times for the link to the GPIO link is correctly
    exported and visible in sysfs. */
-static int _gpio_wait_ready(struct gpio *gpio) {
+static int _gpio_wait_ready(char *wait_path, struct gpio *gpio) {
     while (1) {
-        if (access(gpio->priv->dir_path, W_OK) == 0)
+        if (access(wait_path, W_OK) == 0)
             break;
         
         usleep(250);
@@ -77,20 +78,20 @@ static int _gpio_open(int gpioId, int dir, struct gpio *gpio) {
     if (_gpio_export(gpioId) < 0)
         return -1;
 
-    /* Wait for the GPIO device to show up. */
-    if (_gpio_wait_ready(gpio) < 0)
-        return -1;
-    
     /* Set the direction */
     snprintf(path, PATH_MAX, GPIO_DIR_FILE_FMT, gpioId);
 
+    /* Wait for the GPIO device to show up. */
+    if (_gpio_wait_ready(path, gpio) < 0)
+        return -1;
+    
     if ((fd = open(path, O_WRONLY)) < 0) 
         return -1;
 
     if (dir == GPIO_DIR_OUT) {
         sz = sizeof(_DIR_OUTPUT) - 1;
         if (write(fd, _DIR_OUTPUT, sz) < sz)
-            res = -1
+            res = -1;
         close(fd);
         if (res) return res;
     }
@@ -105,11 +106,11 @@ static int _gpio_open(int gpioId, int dir, struct gpio *gpio) {
         snprintf(path, PATH_MAX, GPIO_EDGE_FILE_FMT, gpioId);
 
         /* Tell that we want an event on rising edge. */
-        if ((fd = open(gpio->priv->edge_path, O_WRONLY)) < 0)
+        if ((fd = open(path, O_WRONLY)) < 0)
             return -1;
 
         sz = sizeof(_EDGE_BOTH) - 1;
-        if (write(fd, _EDGE_BOTH, sz) < sz, close(fd))
+        if (write(fd, _EDGE_BOTH, sz) < sz)
             res = -1;
         close(fd);
         if (res) return res;
@@ -120,13 +121,14 @@ static int _gpio_open(int gpioId, int dir, struct gpio *gpio) {
 
     snprintf(path, PATH_MAX, GPIO_VALUE_FILE_FMT, gpioId);
 
-    if (dir == GPIO_DIR_OUT)
-        gpio->priv->fd = open(gpio->priv->value_path, O_WRONLY);
-    else
-        gpio->priv->fd = open(gpio->priv->value_path, O_RDONLY);
-
-    if (gpio->priv->fd < 0)
+    if ((gpio->priv->fd = open(path, O_RDWR)) < 0)
         return -1;
+
+    /* Save the initial value */
+    if (gpio_read(gpio, &gpio->init_value) < 0) {
+        close(gpio->priv->fd);
+        return -1;
+    }
 
     return 0;
 }
@@ -164,29 +166,54 @@ int gpio_read(struct gpio *gpio, int *val) {
 }
 
 int gpio_close(struct gpio *gpio) {
-
-    if (_gpio_unexport(gpio->gpio)) {
-        /* shrug */
-    }
+    gpio_write(gpio, gpio->init_value);
+    _gpio_unexport(gpio->gpio);
     close(gpio->priv->fd);
-
     free(gpio->priv);
 }
 
-int gpio_wait_single(struct gpio *gpio) {
-    char buf[2];
-    struct pollfd pfd;
+#define _GPIO_WAIT_MAX 16
 
-    pfd.fd = gpio->priv->fd;
-    pfd.events = POLLPRI | POLLERR;
-    pfd.revents = 0;
+int _gpio_wait(int n, struct gpio **gpios) {
+    struct pollfd pfd[_GPIO_WAIT_MAX];
 
-    lseek(gpio->priv->fd, 0, SEEK_SET);
+    if (n > _GPIO_WAIT_MAX)
+        return -1;     
 
-    if (poll(&pfd, 1, -1) < 0)
+    for (int i = 0; i < n; i++) {
+        /* Can't poll on an output GPIO */
+        if (gpios[i]->dir != GPIO_DIR_IN)
+            return -1;
+
+        gpios[i]->ready = 0;
+
+        pfd[i].fd = gpios[i]->priv->fd;
+        pfd[i].events = POLLPRI | POLLERR;
+        pfd[i].revents = 0;
+
+        lseek(gpios[i]->priv->fd, 0, SEEK_SET);
+    }
+
+    if (poll(pfd, n, -1) < 0)
         return -1;
+
+    for (int i = 0; i < n; i++)
+        if (pfd[i].revents > 0)
+            gpios[i]->ready = 1;
+
+    return 0;
 }
 
-int gpio_wait_many(int n, struct gpio *gpio) {
+int gpio_wait(int n, ...) {
+    struct gpio *gpios[_GPIO_WAIT_MAX];
+    va_list ap;
 
+    va_start(ap, n);
+
+    for (int i = 0; i < n; i++) {
+        struct gpio *gpio = va_arg(ap, struct gpio *);
+        gpios[i] = gpio;
+    }
+
+    return _gpio_wait(n, gpios);
 }

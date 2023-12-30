@@ -6,53 +6,51 @@
 
 int main() {
     struct gpio red_led;
+    struct gpio yellow_led;
+    struct gpio green_led;
     struct gpio yellow_button;
-
-#if 0
-    if (gpio_open_write(6, &red_led) < 0) {
-        fprintf(stderr, "Unable to open GPIO line\n");
-        exit(1);
-    }
-
-    if (gpio_write(&red_led, GPIO_VALUE_UP) < 0) {
-        fprintf(stderr, "Failed to set GPIO value\n");
-    }
-
-    sleep(1);
-
-    if (gpio_write(&red_led, GPIO_VALUE_DOWN) < 0) {
-        fprintf(stderr, "Failed to set GPIO value\n");
-    }
-
-    if (gpio_close(&red_led) < 0) {
-        exit(1);
-    }
-#endif 
+    struct gpio green_button;
 
     if (gpio_open_read(19, &yellow_button) < 0) {
         fprintf(stderr, "Unable to open GPIO line for yellow button\n");
         exit(1);
     }
 
-#if 0
-    if (gpio_open_read(20, &red_button) < 0) {
+    if (gpio_open_read(20, &green_button) < 0) {
         fprintf(stderr, "Unable to open GPIO line for red button\n");
         exit(1);
     }
-#endif
 
     if (gpio_open_write(5, &red_led) < 0) {
         fprintf(stderr, "Unable to open GPIO line for RED led\n");
         exit(1);
     }
 
+    if (gpio_open_write(13, &yellow_led) < 0) {
+        fprintf(stderr, "Unable to open GPIO line for YELLOW led\n");
+        exit(1);
+    }
+
+    if (gpio_open_write(6, &green_led) < 0) {
+        fprintf(stderr, "Unable to open GPIO line for GREEN led\n");
+        exit(1);
+    }
+
     while (1) {
-        int n;
+        int n_green, n_yellow;
 
-        gpio_wait_single(&yellow_button);
+        gpio_wait(2, &yellow_button, &green_button);
 
-        gpio_read(&yellow_button, &n);
-        gpio_write(&red_led, n);
+        gpio_read(&yellow_button, &n_yellow);
+        gpio_read(&green_button, &n_green);
+
+        if (n_yellow == 1 && n_green == 1)
+            gpio_write(&green_led, 1);
+        if (n_yellow == 0 || n_green == 0)
+            gpio_write(&green_led, 0);
+
+        gpio_write(&red_led, n_green);
+        gpio_write(&yellow_led, n_yellow);
     }
 
     gpio_close(&yellow_button);
