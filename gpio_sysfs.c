@@ -31,6 +31,8 @@ static int _gpio_export(int gpioId) {
     write(fd, buf, strlen(buf));
 
     close(fd);
+
+    return 0;
 }
 
 static int _gpio_unexport(int gpioId) {
@@ -46,6 +48,8 @@ static int _gpio_unexport(int gpioId) {
     write(fd, buf, strlen(buf));
 
     close(fd);
+
+    return 0;
 }
 
 /* It takes some times for the link to the GPIO link is correctly
@@ -170,6 +174,7 @@ int gpio_close(struct gpio *gpio) {
     _gpio_unexport(gpio->gpio);
     close(gpio->priv->fd);
     free(gpio->priv);
+    return 0;
 }
 
 #define _GPIO_WAIT_MAX 16
