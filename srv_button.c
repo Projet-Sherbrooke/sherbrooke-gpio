@@ -136,9 +136,8 @@ int main() {
         
     if (epoll_ctl(ep_fd, EPOLL_CTL_ADD, srv_sock, &ev_srv) == -1) {
         perror("epoll_ctl: listen_sock");
-
         close_gpios();
-        close(srv_sock);
+        exit(1);
     }
 
     /* Add the GPIOs into the epoll set. */
@@ -146,14 +145,18 @@ int main() {
     ev_srv.data.fd = gpio_fd(&yellow_button);
 
     if (epoll_ctl(ep_fd, EPOLL_CTL_ADD, gpio_fd(&yellow_button), &ev_srv) < 0) {
-
+        perror("epoll_ctl");
+        close_gpios();
+        exit(1);
     }
 
     ev_srv.events = EPOLLPRI | EPOLLET;
     ev_srv.data.fd = gpio_fd(&green_button);
 
     if (epoll_ctl(ep_fd, EPOLL_CTL_ADD, gpio_fd(&green_button), &ev_srv) < 0) {
-
+        perror("epoll_ctl");
+        close_gpios();
+        exit(1);
     }
 
     /* Loop forever... */
@@ -165,7 +168,7 @@ int main() {
         /* Wait for the GPIOs to change state. */
         if ((nfds = epoll_wait(ep_fd, events, MAX_EVENTS, -1)) < 0) {
             perror("epoll_wait");
-
+            //done = 1;
         }
 
         for (int i = 0; i < nfds; i++) {

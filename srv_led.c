@@ -131,7 +131,7 @@ int main() {
 
         /* Prepare the server socket. */
 
-        printf("éWaiting for a connection...\n");
+        printf("Waiting for a connection...\n");
 
         if ((cli_sock = accept(srv_sock, NULL, NULL)) == -1) {
             perror("accept");
